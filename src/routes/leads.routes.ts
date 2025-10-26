@@ -23,23 +23,13 @@ interface LeadRequest {
  */
 router.get('/', authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { limit = 50, offset = 0, source, status } = req.query;
+    const { limit = 50, offset = 0, status } = req.query;
 
-    let query = supabase.client
-      .from('leads')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .range(Number(offset), Number(offset) + Number(limit) - 1);
-
-    if (source) {
-      query = query.eq('source', source);
-    }
-
-    if (status) {
-      query = query.eq('status', status);
-    }
-
-    const { data: leads, error } = await query;
+    const { data: leads, error } = await supabase.queryLeads({
+      status: status as string,
+      limit: Number(limit),
+      offset: Number(offset),
+    });
 
     if (error) {
       console.error('Database error:', error);
@@ -95,24 +85,19 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 
     // Save to database
     const leadData = {
+      user_id: 'public', // Default user_id for public leads
       name,
       email,
-      phone: phone || null,
+      phone: phone || undefined,
       source: source || 'unknown',
       qualification_score: 0.5, // Default moderate interest
-      status: 'new',
       metadata: metadata || {},
       created_at: new Date().toISOString(),
     };
 
-    const { data: lead, error: dbError } = await supabase.client
-      .from('leads')
-      .insert([leadData])
-      .select()
-      .single();
+    const lead = await supabase.saveLead(leadData);
 
-    if (dbError) {
-      console.error('Database error:', dbError);
+    if (!lead) {
       res.status(500).json({
         success: false,
         error: 'Failed to save lead',
@@ -136,7 +121,7 @@ ${metadata?.conversationLength ? `💬 **Messages:** ${metadata.conversationLeng
 **Time:** ${new Date().toLocaleString()}
       `.trim();
 
-      await telegram.sendMessage(telegramMessage);
+      await telegram.notify(telegramMessage);
     } catch (telegramError) {
       console.error('Telegram notification failed:', telegramError);
       // Don't fail the request if Telegram fails
@@ -146,22 +131,24 @@ ${metadata?.conversationLength ? `💬 **Messages:** ${metadata.conversationLeng
     let paymentLink = null;
     if (source === 'ai_widget' || source === 'pricing_page') {
       try {
-        paymentLink = await flutterwave.generatePaymentLink({
-          customer: { name, email, phone_number: phone || '' },
-          amount: 99, // Default to Starter plan
-          currency: 'USD',
-          tx_ref: `lead-${lead.id}-${Date.now()}`,
-          customizations: {
-            title: 'CallWaitingAI Subscription',
+        if (lead?.id) {
+          paymentLink = await flutterwave.generatePaymentLink({
+            amount: 99, // Default to Starter plan
+            currency: 'USD',
+            customerName: name,
+            customerEmail: email,
+            customerPhone: phone || undefined,
             description: 'Get started with AI-powered voice reception',
-          },
-        });
+            reference: `lead-${lead.id}`,
+          });
 
-        // Update lead with payment link
-        await supabase.client
-          .from('leads')
-          .update({ flutterwave_payment_link: paymentLink })
-          .eq('id', lead.id);
+          if (paymentLink) {
+            await supabase.updateLead(lead.id, {
+              flutterwave_payment_link: paymentLink,
+              payment_status: 'pending',
+            });
+          }
+        }
 
       } catch (paymentError) {
         console.error('Payment link generation failed:', paymentError);
@@ -172,10 +159,9 @@ ${metadata?.conversationLength ? `💬 **Messages:** ${metadata.conversationLeng
     res.status(201).json({
       success: true,
       lead: {
-        id: lead.id,
-        name: lead.name,
-        email: lead.email,
-        status: lead.status,
+        id: lead?.id,
+        name: lead?.name,
+        email: lead?.email,
       },
       paymentLink,
       message: 'Lead captured successfully! Our team will reach out soon.',
@@ -198,11 +184,7 @@ router.get('/:id', authenticate, async (req: Request, res: Response): Promise<vo
   try {
     const { id } = req.params;
 
-    const { data: lead, error } = await supabase.client
-      .from('leads')
-      .select('*')
-      .eq('id', id)
-      .single();
+    const { data: lead, error } = await supabase.getLead(id);
 
     if (error || !lead) {
       res.status(404).json({
@@ -239,20 +221,18 @@ router.patch('/:id', authenticate, async (req: Request, res: Response): Promise<
     delete updates.id;
     delete updates.created_at;
 
-    const { data: lead, error } = await supabase.client
-      .from('leads')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
+    const { error } = await supabase.updateLead(id, updates);
 
-    if (error || !lead) {
+    if (error) {
       res.status(404).json({
         success: false,
         error: 'Lead not found or update failed',
       });
       return;
     }
+
+    // Fetch updated lead
+    const { data: lead } = await supabase.getLead(id);
 
     res.json({
       success: true,

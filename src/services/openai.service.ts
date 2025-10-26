@@ -25,7 +25,7 @@ export class OpenAIService {
   private provider: 'openai' | 'groq';
   private openaiClient?: OpenAI;
   private groqClient?: Groq;
-  private model: string;
+  private model: string = '';
 
   constructor() {
     this.provider = (process.env.AI_PROVIDER as 'openai' | 'groq') || 'groq';
@@ -220,12 +220,33 @@ Customer message: "${message}"
 
 Analysis:`;
 
-      const completion = await this.client.chat.completions.create({
-        model: 'gpt-3.5-turbo', // Use faster model for analysis
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.3,
-        max_tokens: 150,
-      });
+      let completion: any;
+
+      if (this.provider === 'groq' && this.groqClient) {
+        // Use Groq for sentiment analysis
+        completion = await this.groqClient.chat.completions.create({
+          model: this.model,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.3,
+          max_tokens: 150,
+        });
+      } else if (this.openaiClient) {
+        // Use OpenAI for sentiment analysis
+        completion = await this.openaiClient.chat.completions.create({
+          model: 'gpt-3.5-turbo', // Use faster model for analysis
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.3,
+          max_tokens: 150,
+        });
+      } else {
+        // No AI provider configured, return default
+        return {
+          score: 0.5,
+          intent: 'general',
+          urgency: 'medium',
+          keywords: [],
+        };
+      }
 
       const responseText = completion.choices[0]?.message?.content || '{}';
 

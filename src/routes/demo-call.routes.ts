@@ -92,18 +92,14 @@ router.post('/', demoCallRateLimiter, async (req: Request, res: Response): Promi
 
     // Save demo call to database
     try {
-      await supabase.client.from('call_logs').insert([
-        {
-          call_id: vapiResponse.id,
-          caller_phone: cleanedPhone,
-          caller_name: name || 'Demo User',
-          status: 'initiated',
-          source: source || 'landing_page_demo',
-          is_demo: true,
-          client_ip: clientIp,
-          created_at: new Date().toISOString(),
-        },
-      ]);
+      await supabase.logRequest({
+        endpoint: '/api/voice/v1/demo-call',
+        method: 'POST',
+        status_code: 200,
+        request_body: { phone: cleanedPhone, name },
+        response_body: { call_id: vapiResponse.id },
+        ip_address: clientIp,
+      });
     } catch (dbError) {
       console.error('[Demo Call] Database error (non-fatal):', dbError);
       // Don't fail the request if DB save fails
@@ -126,7 +122,7 @@ router.post('/', demoCallRateLimiter, async (req: Request, res: Response): Promi
 🔥 Hot lead! They're trying the demo now!
       `.trim();
 
-      await telegram.sendMessage(telegramMessage);
+      await telegram.notify(telegramMessage);
     } catch (telegramError) {
       console.error('[Demo Call] Telegram notification failed (non-fatal):', telegramError);
       // Don't fail the request if Telegram fails
@@ -191,12 +187,7 @@ router.post('/', demoCallRateLimiter, async (req: Request, res: Response): Promi
  */
 router.get('/stats', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const { data, error } = await supabase.client
-      .from('call_logs')
-      .select('*')
-      .eq('is_demo', true)
-      .order('created_at', { ascending: false })
-      .limit(100);
+    const { data, error } = await supabase.getDemoCallLogs(100);
 
     if (error) {
       console.error('[Demo Call Stats] Database error:', error);

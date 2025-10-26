@@ -307,6 +307,172 @@ export class SupabaseService {
       return null;
     }
   }
+
+  /**
+   * Get chat conversation by ID
+   */
+  async getChatConversation(conversationId: string): Promise<any | null> {
+    try {
+      const { data, error } = await this.client
+        .from('chat_conversations')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .single();
+
+      if (error) {
+        console.error('[Supabase] Failed to get conversation:', error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('[Supabase] Exception while getting conversation:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Upsert chat conversation
+   */
+  async upsertChatConversation(data: any): Promise<{ error: any | null }> {
+    try {
+      const { error } = await this.client
+        .from('chat_conversations')
+        .upsert(data, {
+          onConflict: 'conversation_id',
+        });
+
+      return { error };
+    } catch (error) {
+      console.error('[Supabase] Exception while upserting conversation:', error);
+      return { error };
+    }
+  }
+
+  /**
+   * Update chat conversation metadata
+   */
+  async updateChatMetadata(conversationId: string, metadata: { name?: string; email?: string; phone?: string }): Promise<{ error: any | null }> {
+    try {
+      const { error } = await this.client
+        .from('chat_conversations')
+        .update({
+          user_metadata: metadata,
+          lead_captured: true,
+          lead_captured_at: new Date().toISOString(),
+        })
+        .eq('conversation_id', conversationId);
+
+      return { error };
+    } catch (error) {
+      console.error('[Supabase] Exception while updating metadata:', error);
+      return { error };
+    }
+  }
+
+  /**
+   * Query leads with filters
+   */
+  async queryLeads(filters?: { user_id?: string; status?: string; limit?: number; offset?: number }): Promise<{ data: any[] | null; error: any | null }> {
+    try {
+      let query = this.client
+        .from('leads')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (filters?.user_id) {
+        query = query.eq('user_id', filters.user_id);
+      }
+      if (filters?.status) {
+        query = query.eq('payment_status', filters.status);
+      }
+      if (filters?.limit) {
+        query = query.limit(filters.limit);
+      }
+      if (filters?.offset) {
+        query = query.range(filters.offset, filters.offset + (filters.limit || 10) - 1);
+      }
+
+      const { data, error } = await query;
+
+      return { data, error };
+    } catch (error) {
+      console.error('[Supabase] Exception while querying leads:', error);
+      return { data: null, error };
+    }
+  }
+
+  /**
+   * Get lead by ID
+   */
+  async getLead(leadId: string): Promise<{ data: any | null; error: any | null }> {
+    try {
+      const { data, error } = await this.client
+        .from('leads')
+        .select('*')
+        .eq('id', leadId)
+        .single();
+
+      return { data, error };
+    } catch (error) {
+      console.error('[Supabase] Exception while getting lead:', error);
+      return { data: null, error };
+    }
+  }
+
+  /**
+   * Update lead
+   */
+  async updateLead(leadId: string, updates: Partial<Lead>): Promise<{ error: any | null }> {
+    try {
+      const { error } = await this.client
+        .from('leads')
+        .update(updates)
+        .eq('id', leadId);
+
+      return { error };
+    } catch (error) {
+      console.error('[Supabase] Exception while updating lead:', error);
+      return { error };
+    }
+  }
+
+  /**
+   * Get call by ID
+   */
+  async getCallById(callId: string): Promise<{ data: any | null; error: any | null }> {
+    try {
+      const { data, error } = await this.client
+        .from('calls')
+        .select('*')
+        .eq('id', callId)
+        .single();
+
+      return { data, error };
+    } catch (error) {
+      console.error('[Supabase] Exception while getting call:', error);
+      return { data: null, error };
+    }
+  }
+
+  /**
+   * Fetch demo call logs for analytics
+   */
+  async getDemoCallLogs(limit = 100): Promise<{ data: any[] | null; error: any | null }> {
+    try {
+      const { data, error } = await this.client
+        .from('call_logs')
+        .select('*')
+        .eq('is_demo', true)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      return { data, error };
+    } catch (error) {
+      console.error('[Supabase] Exception while fetching demo call logs:', error);
+      return { data: null, error };
+    }
+  }
 }
 
 // Singleton instance

@@ -32,6 +32,29 @@ export class TelegramService {
   }
 
   /**
+   * Send a generic notification message
+   */
+  async notify(message: string): Promise<boolean> {
+    if (!this.enabled || !this.bot) {
+      console.warn('[Telegram] Notifications disabled - skipping');
+      return false;
+    }
+
+    try {
+      await this.bot.sendMessage(this.chatId, message, {
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true
+      });
+
+      console.log('[Telegram] Notification sent successfully');
+      return true;
+    } catch (error) {
+      console.error('[Telegram] Failed to send notification:', error);
+      return false;
+    }
+  }
+
+  /**
    * Send new lead notification
    */
   async notifyNewLead(lead: Lead, callTranscript?: string): Promise<boolean> {

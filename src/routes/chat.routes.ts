@@ -46,11 +46,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     let conversationHistory: ChatMessage[] = [];
 
     if (conversationId) {
-      const { data: historyData } = await supabase.client
-        .from('chat_conversations')
-        .select('messages')
-        .eq('conversation_id', conversationId)
-        .single();
+      const historyData = await supabase.getChatConversation(conversationId);
 
       if (historyData?.messages) {
         conversationHistory = historyData.messages;
@@ -98,11 +94,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       keywords: sentiment.keywords,
     };
 
-    const { error: upsertError } = await supabase.client
-      .from('chat_conversations')
-      .upsert(conversationData, {
-        onConflict: 'conversation_id',
-      });
+    const { error: upsertError } = await supabase.upsertChatConversation(conversationData);
 
     if (upsertError) {
       console.error('[Chat] Failed to save conversation:', upsertError);
@@ -152,13 +144,9 @@ router.get('/:conversationId', async (req: Request, res: Response): Promise<void
   try {
     const { conversationId } = req.params;
 
-    const { data, error } = await supabase.client
-      .from('chat_conversations')
-      .select('*')
-      .eq('conversation_id', conversationId)
-      .single();
+    const data = await supabase.getChatConversation(conversationId);
 
-    if (error || !data) {
+    if (!data) {
       res.status(404).json({
         success: false,
         error: 'Conversation not found',
@@ -189,14 +177,7 @@ router.post('/:conversationId/metadata', async (req: Request, res: Response): Pr
     const { conversationId } = req.params;
     const { name, email, phone } = req.body;
 
-    const { error } = await supabase.client
-      .from('chat_conversations')
-      .update({
-        user_metadata: { name, email, phone },
-        lead_captured: true,
-        lead_captured_at: new Date().toISOString(),
-      })
-      .eq('conversation_id', conversationId);
+    const { error } = await supabase.updateChatMetadata(conversationId, { name, email, phone });
 
     if (error) {
       console.error('[Chat] Metadata update error:', error);
