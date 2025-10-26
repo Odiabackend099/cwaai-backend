@@ -1,0 +1,69 @@
+# Render.com Deployment Configuration
+# Auto-deploy CallWaitingAI Voice API Gateway
+
+services:
+  # Voice API Gateway (Express.js)
+  - type: web
+    name: callwaitingai-voice-api
+    env: node
+    region: oregon
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+
+    # Environment Variables (set these in Render Dashboard)
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      - key: PORT
+        value: 3000
+
+      - key: API_BASE_URL
+        sync: false # Set in dashboard
+
+      # Supabase
+      - key: SUPABASE_URL
+        value: https://bcufohulqrceytkrqpgd.supabase.co
+
+      - key: SUPABASE_SERVICE_KEY
+        sync: false # Secret - set in dashboard
+
+      - key: SUPABASE_ANON_KEY
+        sync: false # Set in dashboard
+
+      # Vapi
+      - key: VAPI_PRIVATE_KEY
+        sync: false # Secret - set in dashboard
+
+      - key: VAPI_PUBLIC_KEY
+        value: ddd720c5-6fb8-4174-b7a6-729d7b308cb9
+
+      - key: VAPI_PHONE_NUMBER
+        value: +12765825329
+
+      - key: VAPI_PHONE_ID
+        value: 15c07867-d296-4ece-ba91-f8fa068f894e
+
+      - key: VAPI_WEBHOOK_SECRET
+        sync: false # Set in dashboard after first deploy
+
+      # Telegram
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false # Secret - set in dashboard
+
+      - key: TELEGRAM_CHAT_ID
+        value: 6526780056
+
+      # Flutterwave
+      - key: FLUTTERWAVE_SECRET_KEY
+        sync: false # Secret - set in dashboard
+
+      - key: FLUTTERWAVE_PUBLIC_KEY
+        sync: false # Set in dashboard
+
+      # Provider selection
+      - key: VOICE_PROVIDER
+        value: vapi
